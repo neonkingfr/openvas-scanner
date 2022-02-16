@@ -49,6 +49,7 @@
 #include <gvm/base/proctitle.h>
 #include <gvm/boreas/alivedetection.h> /* for start_alive_detection() */
 #include <gvm/boreas/boreas_io.h>      /* for get_host_from_queue() */
+#include <gvm/ipc.h>
 #include <gvm/util/mqtt.h>
 #include <gvm/util/nvticache.h> /* for nvticache_t */
 #include <pthread.h>
@@ -900,7 +901,7 @@ check_host_authorization (gvm_host_t *host, const struct in6_addr *addr)
  * @brief Set up some data and jump into attack_host()
  */
 static void
-attack_start (struct attack_start_args *args)
+attack_start (struct ipc_context *cctx, struct attack_start_args *args)
 {
   struct scan_globals *globals = args->globals;
   char ip_str[INET6_ADDRSTRLEN], *hostnames;
@@ -957,6 +958,8 @@ attack_start (struct attack_start_args *args)
   g_free (hostnames);
   attack_host (globals, &hostip, args->host->vhosts, args->sched, kb, main_kb);
   kb_lnk_reset (main_kb);
+  // TODO change target to ENUM
+  ipc_send (cctx, 0, "attacked host!!!11112", strlen ("attacked host!!!11112"));
 
   if (!scan_is_stopped ())
     {
@@ -1135,6 +1138,32 @@ scan_stop_cleanup ()
   g_free (pid);
 }
 
+static void
+read_from_ipc (struct ipc_contexts *ctxs)
+{
+  int i;
+  struct ipc_context *ctx = NULL;
+  char *rptr;
+  if (ctxs == NULL)
+    return;
+  for (i = 0; i < ctxs->len; i++)
+    {
+      ctx = &ctxs->ctxs[i];
+      if (ctx != NULL && ctx->pid > 0 && (rptr = ipc_retrieve (ctx, 0)) != NULL)
+        {
+          if (strcmp (rptr, IPC_TERMINATE_SIGNAL) == 0)
+            {
+              ipc_close (ctx);
+            }
+          else
+            {
+              g_message ("message from child %d: %s", ctx->pid, rptr);
+            }
+          free (rptr);
+        }
+    }
+}
+
 /**
  * @brief Attack a whole network.
  */
@@ -1154,6 +1183,7 @@ attack_network (struct scan_globals *globals)
   kb_t arg_host_kb, main_kb;
   GSList *unresolved;
   char buf[96];
+  struct ipc_contexts *ctxs = NULL;
 
   check_deprecated_prefs ();
 
@@ -1311,8 +1341,11 @@ attack_network (struct scan_globals *globals)
   while (host && !scan_is_stopped ())
     {
       int pid, rc;
+      struct ipc_context *ctx;
+
       struct attack_start_args args;
       char *host_str;
+      read_from_ipc (ctxs);
 
       if (!test_alive_hosts_only
           && (!allow_simultaneous_ips && host_is_currently_scanned (host)))
@@ -1364,9 +1397,10 @@ attack_network (struct scan_globals *globals)
       args.main_kb = main_kb;
 
     forkagain:
-      pid = create_process ((process_func_t) attack_start, &args);
-      /* Close child process' socket. */
-      if (pid < 0)
+      ctx =
+        create_communication_process ((ipc_process_func) attack_start, &args);
+      /* Close child processs' socket. */
+      if (ctx == NULL)
         {
           fork_retries++;
           if (fork_retries > MAX_FORK_RETRIES)
@@ -1384,6 +1418,14 @@ attack_network (struct scan_globals *globals)
           fork_sleep (fork_retries);
           goto forkagain;
         }
+      // we initialize lazy so that the child doesn't care about that memory
+      pid = ctx->pid;
+      if (ctxs == NULL)
+        {
+          ctxs = ipc_contexts_init (0);
+        }
+      ipc_add_context (ctxs, ctx);
+
       hosts_set_pid (host_str, pid);
 
       if (test_alive_hosts_only)
@@ -1456,7 +1498,8 @@ attack_network (struct scan_globals *globals)
   /* Every host is being tested... We have to wait for the processes
    * to terminate. */
   while (hosts_read () == 0)
-    ;
+    read_from_ipc (ctxs);
+
   g_debug ("Test complete");
 
 scan_stop:
@@ -1467,6 +1510,7 @@ scan_stop:
 
 stop:
 
+  ipc_destroy_contexts (ctxs);
   if (test_alive_hosts_only)
     {
       int err;
@@ -1510,6 +1554,5 @@ stop:
   gvm_hosts_free (hosts);
   if (alive_hosts_list)
     gvm_hosts_free (alive_hosts_list);
-
   set_scan_status ("finished");
 }

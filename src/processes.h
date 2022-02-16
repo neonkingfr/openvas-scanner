@@ -26,6 +26,7 @@
 #ifndef _OPENVAS_THREADS_H
 #define _OPENVAS_THREADS_H
 
+#include <gvm/ipc.h>
 #include <sys/types.h> /* for pid_t */
 
 typedef void (*process_func_t) (void *);
@@ -33,4 +34,9 @@ pid_t
 create_process (process_func_t, void *);
 int terminate_process (pid_t);
 
+struct ipc_context *
+create_communication_process (ipc_process_func, void *);
+
+int
+terminate_communication_process (struct ipc_contexts *);
 #endif

@@ -78,6 +78,7 @@ else (PCAP_CONFIG)
 endif (PCAP_CONFIG)
 
 find_package (Threads)
+find_package (IPC REQUIRED)
 
 add_executable (openvas attack.c debug_utils.c hosts.c
                 main.c nasl_plugins.c openvas.c
@@ -171,7 +172,8 @@ target_link_libraries (openvas openvas_nasl_shared ${LIBOPENVAS_NASL_LDFLAGS}
                        ${LIBGVM_BOREAS_LDFLAGS}
                        ${GLIB_LDFLAGS} ${GCRYPT_LDFLAGS}
                        ${EXECINFO_LDFLAGS} ${PCAP_LDFLAGS}
-                       ${LINKER_HARDENING_FLAGS} ${CMAKE_THREAD_LIBS_INIT})
+                       ${LINKER_HARDENING_FLAGS} ${CMAKE_THREAD_LIBS_INIT}
+					   IPC::IPC)
 
 ## Tests
 

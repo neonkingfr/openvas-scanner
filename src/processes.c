@@ -31,7 +31,8 @@
 #include <errno.h>            /* for errno() */
 #include <glib.h>             /* for g_error */
 #include <gvm/base/logging.h> /* for gvm_log_lock/unlock() */
-#include <gvm/util/mqtt.h>    /* for mqtt_reset() */
+#include <gvm/ipc.h>
+#include <gvm/util/mqtt.h> /* for mqtt_reset() */
 #include <setjmp.h>
 #include <signal.h>   /* for kill() */
 #include <stdlib.h>   /* for exit() */
@@ -118,4 +119,32 @@ create_process (process_func_t function, void *argument)
   if (pid < 0)
     g_warning ("Error : could not fork ! Error : %s", strerror (errno));
   return pid;
+}
+
+struct ipc_context *
+create_communication_process (ipc_process_func func, void *arg)
+{
+  struct ipc_context *pctx = NULL;
+  if ((pctx = ipc_exec_as_process (PIPE, func, arg, NULL)) == NULL)
+    {
+      g_warning ("Error : could not fork ! Error : %s", strerror (errno));
+    }
+  return pctx;
+}
+
+int
+terminate_communication_process (struct ipc_contexts *ctx)
+{
+  int i;
+  if (ctx == NULL)
+    return -1;
+  for (i = 0; i < ctx->len; i++)
+    {
+      if (ctx->ctxs[i].pid > 0)
+        {
+          terminate_process (ctx->ctxs[i].pid);
+        }
+    }
+
+  return ipc_destroy_contexts (ctx);
 }
