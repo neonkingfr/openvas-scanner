@@ -438,6 +438,8 @@ set_gnutls_protocol (gnutls_session_t session, openvas_encaps_t encaps,
       break;
     }
 
+  g_debug ("%s: setting %s as priority_string based on %d", __func__,
+           priorities, encaps);
   if ((err = gnutls_priority_set_direct (session, priorities, &errloc)))
     {
       g_message ("[%d] setting session priorities '%.20s': %s", getpid (),
@@ -1169,12 +1171,19 @@ failed:
   return ret;
 }
 
+const char *priorities = "NORMAL:+ARCFOUR-128:%COMPAT";
+
+void
+open_stream_connection_priorities (const char *p)
+{
+  priorities = p;
+}
+
 int
 open_stream_connection (struct script_infos *args, unsigned int port,
                         int transport, int timeout)
 {
-  return open_stream_connection_ext (args, port, transport, timeout,
-                                     "NORMAL:+ARCFOUR-128:%COMPAT",
+  return open_stream_connection_ext (args, port, transport, timeout, priorities,
                                      NO_PRIORITY_FLAGS);
 }
 
