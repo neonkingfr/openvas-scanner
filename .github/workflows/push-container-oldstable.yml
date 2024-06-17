@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: rs-binaries
           path: assets
@@ -51,7 +51,7 @@ jobs:
           username: ${{ secrets.dockerhub_user }}
           password: ${{ secrets.dockerhub_token }}
       - name: Build and push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' && (github.ref_type == 'tag' || github.ref_name == 'main') }}
